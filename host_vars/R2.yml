@@ -1,0 +1,11 @@
+---
+loopback_ip: "172.16.2.1/24"
+ospf_router_id: "2.2.2.2"
+
+underlay_interfaces:
+  - { name: ether2, ip: 10.0.12.2/30 }
+  - { name: ether3, ip: 10.0.23.1/30 }
+
+gre_tunnels:
+  - { name: gre-to-r1, local_ip: 10.0.12.2, remote_ip: 10.0.12.1, tunnel_ip: 10.1.2.2/30 }
+  - { name: gre-to-r3, local_ip: 10.0.23.1, remote_ip: 10.0.23.2, tunnel_ip: 10.2.3.1/30 }

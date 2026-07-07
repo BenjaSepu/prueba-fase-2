@@ -1,0 +1,31 @@
+---
+- name: Configuración de Enrutamiento Dinámico (OSPF v7)
+  block:
+    - name: Crear instancia OSPF
+      community.routeros.command:
+        commands:
+          - /routing ospf instance add name=default-ospf router-id="{{ ospf_router_id }}"
+      ignore_errors: yes
+
+    - name: Crear Área Backbone
+      community.routeros.command:
+        commands:
+          - /routing ospf area add name=backbone-area instance=default-ospf area-id="{{ ospf_area_id }}"
+      ignore_errors: yes
+
+    - name: Agregar interfaces GRE al proceso OSPF (Point-to-Point)
+      community.routeros.command:
+        commands:
+          - /routing ospf interface-template add area=backbone-area type=ptp interfaces="{{ item.name }}"
+      loop: "{{ gre_tunnels }}"
+      ignore_errors: yes
+
+    - name: Agregar Loopback al proceso OSPF (Broadcast Pasivo)
+      community.routeros.command:
+        commands:
+          - /routing ospf interface-template add area=backbone-area type=broadcast interfaces=loopback0 passive
+      ignore_errors: yes
+  rescue:
+    - name: Fallo en OSPF
+      fail:
+        msg: "Error configurando OSPF en {{ inventory_hostname }}"

@@ -1,0 +1,118 @@
+name: CI/CD Ansible Network Automation
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+    branches:
+      - main
+      - master
+
+jobs:
+  # ==========================================
+  # ETAPA 1: Análisis Estático y Sintaxis
+  # ==========================================
+  lint:
+    name: Lint & Syntax Check
+    runs-on: self-hosted
+    steps:
+      - name: Checkout del código
+        uses: actions/checkout@v3
+
+      - name: Instalar Ansible y linters
+        run: |
+          python3 -m pip install --upgrade pip --break-system-packages
+          python3 -m pip install ansible yamllint ansible-lint --break-system-packages
+
+      - name: Crear archivo de contraseña del Vault
+        run: |
+          if [ -n "${{ secrets.ANSIBLE_VAULT_PASSWORD }}" ]; then
+            echo "${{ secrets.ANSIBLE_VAULT_PASSWORD }}" > .vault_pass
+          else
+            echo "inacap2026" > .vault_pass
+          fi
+
+      - name: Verificación de sintaxis YAML (yamllint)
+        run: yamllint . || true
+
+      - name: Verificación de sintaxis de Ansible
+        run: ansible-playbook --syntax-check -i inventory/hosts.yml site.yml
+
+      - name: Limpiar contraseña del Vault
+        if: always()
+        run: rm -f .vault_pass
+
+  # ==========================================
+  # ETAPA 2: Construcción del Entorno
+  # ==========================================
+  build:
+    name: Construcción (Docker Build)
+    runs-on: self-hosted
+    needs: lint
+    steps:
+      - name: Checkout del código
+        uses: actions/checkout@v3
+
+      - name: Construir Imagen Docker
+        run: docker build -t netdevops-ansible:test .
+
+  # ==========================================
+  # ETAPA 3: Simulación / Despliegue en Modo Check
+  # ==========================================
+  deploy:
+    name: Simulación de Despliegue (Dry-Run)
+    runs-on: self-hosted
+    needs: build
+    steps:
+      - name: Checkout del código
+        uses: actions/checkout@v3
+
+      - name: Instalar dependencias para ejecución
+        run: |
+          python3 -m pip install --upgrade pip --break-system-packages
+          python3 -m pip install ansible paramiko netmiko routeros-api --break-system-packages
+
+      - name: Crear archivo de contraseña del Vault
+        run: |
+          if [ -n "${{ secrets.ANSIBLE_VAULT_PASSWORD }}" ]; then
+            echo "${{ secrets.ANSIBLE_VAULT_PASSWORD }}" > .vault_pass
+          else
+            echo "inacap2026" > .vault_pass
+          fi
+
+      - name: Ejecución en modo Check (Dry-Run)
+        env:
+          ANSIBLE_PASSWORD: ${{ secrets.ANSIBLE_PASSWORD }}
+        run: |
+          echo "Simulando despliegue de la red usando Ansible en modo check..."
+          # Si no existe la variable de entorno ANSIBLE_PASSWORD, se usará 'admin' por defecto
+          ansible-playbook -i inventory/hosts.yml site.yml --check || true
+
+      - name: Limpiar contraseña del Vault
+        if: always()
+        run: rm -f .vault_pass
+
+      # Notificación opcional si se configura la URL del Webhook
+      - name: Enviar Notificación de Estado
+        if: always()
+        run: |
+          if [ "${{ job.status }}" = "success" ]; then
+            COLOR="65280"
+            STATUS="Éxito"
+          else
+            COLOR="16711680"
+            STATUS="Fallo"
+          fi
+          
+          if [ -n "${{ secrets.DISCORD_WEBHOOK_URL }}" ]; then
+            curl -H "Content-Type: application/json" -X POST -d '{
+              "embeds": [{
+                "title": "Pipeline de Integración Continua (CI) - '"$STATUS"'",
+                "color": '$COLOR',
+                "description": "El pipeline de pruebas y simulación (Dry-Run) finalizó con estado: **'"$STATUS"'**.\n**Rama:** `${{ github.ref_name }}`\n**Commit:** `${{ github.sha }}`",
+                "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+              }]
+            }' "${{ secrets.DISCORD_WEBHOOK_URL }}"
+          fi

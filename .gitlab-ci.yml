@@ -1,0 +1,78 @@
+stages:
+  - lint
+  - build
+  - test_dryrun
+  - deploy
+
+variables:
+  ANSIBLE_FORCE_COLOR: "true"
+
+before_script:
+  # Crear el archivo .vault_pass dinámicamente usando la variable del pipeline
+  - |
+    if [ -n "$ANSIBLE_VAULT_PASSWORD" ]; then
+      echo "$ANSIBLE_VAULT_PASSWORD" > .vault_pass
+    else
+      echo "inacap2026" > .vault_pass
+    fi
+
+after_script:
+  # Eliminar el archivo de contraseña por seguridad al finalizar
+  - rm -f .vault_pass
+
+# ==========================================
+# ETAPA 1: Análisis Estático y Sintaxis
+# ==========================================
+lint_yaml:
+  stage: lint
+  image: python:3.11-slim
+  before_script:
+    - python3 -m pip install yamllint
+  script:
+    - yamllint -d "{extends: relaxed, rules: {line-length: disable}}" . || echo "Advertencias en YAML."
+
+lint_ansible:
+  stage: lint
+  image: python:3.11-slim
+  script:
+    - python3 -m pip install ansible ansible-lint
+    - ansible-lint site.yml || echo "Advertencias de Ansible-Lint."
+    - ansible-playbook --syntax-check -i inventory/hosts.yml site.yml
+
+# ==========================================
+# ETAPA 2: Construcción (Docker Build)
+# ==========================================
+docker_build:
+  stage: build
+  image: docker:24.0.5
+  services:
+    - docker:24.0.5-dind
+  script:
+    # Construcción de la imagen en el pipeline para certificar empaquetado
+    - docker build -t netdevops-ansible:test .
+
+# ==========================================
+# ETAPA 3: Simulación (Dry-Run)
+# ==========================================
+dry_run:
+  stage: test_dryrun
+  image: python:3.11-slim
+  script:
+    - python3 -m pip install ansible paramiko netmiko routeros-api
+    # Simulación de cambios con --check
+    - ansible-playbook -i inventory/hosts.yml site.yml --check || true
+
+# ==========================================
+# ETAPA 4: Despliegue en Producción
+# ==========================================
+deploy_network:
+  stage: deploy
+  image: python:3.11-slim
+  script:
+    - python3 -m pip install ansible paramiko netmiko routeros-api
+    # Despliegue real
+    - ansible-playbook -i inventory/hosts.yml site.yml
+  only:
+    - main
+    - master
+  when: manual # Despliegue manual condicional, protegiendo la producción

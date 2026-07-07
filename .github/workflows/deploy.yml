@@ -1,0 +1,73 @@
+name: Continuous Deployment (CD) Network
+
+on:
+  # El despliegue real solo debe ocurrir cuando los cambios se fusionan en main o master
+  push:
+    branches:
+      - main
+      - master
+  # Permite disparar el despliegue de forma manual desde la pestaña Actions de GitHub
+  workflow_dispatch:
+
+jobs:
+  network-deployment:
+    name: Despliegue Automatizado de Configuraciones
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout del código
+        uses: actions/checkout@v3
+
+      - name: Preparar Entorno de Red
+        run: |
+          python3 -m pip install --upgrade pip --break-system-packages
+          # Instalamos las librerías necesarias para la ejecución real
+          python3 -m pip install ansible paramiko netmiko routeros-api --break-system-packages
+
+      - name: Crear archivo de contraseña del Vault
+        run: |
+          if [ -n "${{ secrets.ANSIBLE_VAULT_PASSWORD }}" ]; then
+            echo "${{ secrets.ANSIBLE_VAULT_PASSWORD }}" > .vault_pass
+          else
+            echo "inacap2026" > .vault_pass
+          fi
+
+      - name: Despliegue en Producción (Aplicación de Configuraciones)
+        env:
+          ANSIBLE_PASSWORD: ${{ secrets.ANSIBLE_PASSWORD }}
+        run: |
+          echo "Iniciando la automatización de la topología de red..."
+          echo "Aplicando configuraciones a los routers de GNS3..."
+          
+          # Se ejecuta el playbook REAL, SIN la bandera --check.
+          # Esto automatiza la aplicación de configuraciones de red de forma definitiva.
+          ansible-playbook -i inventory/hosts.yml site.yml
+
+      - name: Limpiar contraseña del Vault
+        if: always()
+        run: rm -f .vault_pass
+
+      # Notificación opcional de fin de despliegue en producción
+      - name: Enviar Notificación de Despliegue
+        if: always()
+        run: |
+          if [ "${{ job.status }}" = "success" ]; then
+            COLOR="65280"
+            STATUS="Éxito"
+            DESC="El despliegue de la red se ejecutó **correctamente** en producción."
+          else
+            COLOR="16711680"
+            STATUS="Fallo"
+            DESC="El despliegue de la red ha **fallado** en producción. Revisa los logs."
+          fi
+          
+          if [ -n "${{ secrets.DISCORD_WEBHOOK_URL }}" ]; then
+            curl -H "Content-Type: application/json" -X POST -d '{
+              "embeds": [{
+                "title": "Despliegue Continuo (CD) - '"$STATUS"'",
+                "color": '$COLOR',
+                "description": "'"$DESC"'\n**Commit:** `${{ github.sha }}` por @${{ github.actor }}",
+                "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+              }]
+            }' "${{ secrets.DISCORD_WEBHOOK_URL }}"
+          fi

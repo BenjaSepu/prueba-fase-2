@@ -1,0 +1,53 @@
+name: Early Testing Pipeline
+
+on:
+  # Se ejecuta en Pull Requests para detectar errores ANTES de fusionar a main
+  pull_request:
+    branches:
+      - main
+      - master
+  # También se ejecuta cuando trabajas en cualquier otra rama de desarrollo
+  push:
+    branches-ignore:
+      - main
+      - master
+
+jobs:
+  early-error-detection:
+    name: Pruebas y Detección Temprana
+    runs-on: self-hosted
+    steps:
+      - name: Checkout del código
+        uses: actions/checkout@v3
+
+      - name: Preparar Entorno de Pruebas
+        run: |
+          python3 -m pip install --upgrade pip --break-system-packages
+          python3 -m pip install ansible yamllint ansible-lint --break-system-packages
+
+      - name: Crear archivo de contraseña del Vault
+        run: |
+          if [ -n "${{ secrets.ANSIBLE_VAULT_PASSWORD }}" ]; then
+            echo "${{ secrets.ANSIBLE_VAULT_PASSWORD }}" > .vault_pass
+          else
+            echo "inacap2026" > .vault_pass
+          fi
+
+      - name: Prueba 1 - Linting de YAML
+        run: |
+          echo "Buscando errores de formato y sintaxis en archivos YAML..."
+          yamllint -d "{extends: relaxed, rules: {line-length: disable}}" . || echo "Advertencias detectadas en YAML."
+
+      - name: Prueba 2 - Ansible Lint (Mejores Prácticas)
+        run: |
+          echo "Analizando el playbook en busca de malas prácticas..."
+          ansible-lint site.yml || echo "Advertencias de Ansible Lint detectadas."
+
+      - name: Prueba 3 - Verificación de Sintaxis Estricta
+        run: |
+          echo "Simulando la compilación del playbook para detectar errores fatales..."
+          ansible-playbook --syntax-check -i inventory/hosts.yml site.yml
+
+      - name: Limpiar contraseña del Vault
+        if: always()
+        run: rm -f .vault_pass

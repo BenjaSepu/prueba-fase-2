@@ -1,0 +1,5 @@
+---
+- name: Guardar configuración
+  community.routeros.command:
+    commands:
+      - /log info "Configuración base de Ansible aplicada y guardada correctamente."

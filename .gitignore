@@ -1,0 +1,21 @@
+# Ansible
+*.retry
+ansible.log
+
+# Python
+*.pyc
+__pycache__/
+*.pyo
+*.pyd
+
+# Variables de entorno y secretos
+.env
+*.vault
+.vault_pass
+!ansible.cfg
+
+# OS
+.DS_Store
+
+# Documentos
+*.pdf
