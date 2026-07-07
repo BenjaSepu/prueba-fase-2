@@ -132,10 +132,3 @@ El pipeline está dividido en 4 Stages secuenciales:
 
 ### 🔔 4. Observabilidad y Monitoreo (Notificaciones)
 Ambos pipelines cuentan con soporte para notificaciones webhooks en tiempo real. Si configuras la variable `DISCORD_WEBHOOK_URL`, recibirás una alerta de color (verde para éxito, rojo para fallo) directamente en tu canal de comunicación preferido detallando el estado de la compilación, autor del commit, ID de ejecución y enlace directo a los logs para una depuración rápida.
-
----
-
-## 🎥 Entregables y Videos de Demostración
-El proyecto final consta de dos videos explicativos:
-1. **Vídeo 1 (Automatización de Red sin CI/CD)**: Explicación de la topología en GNS3, modularidad de roles (`base_config`, `gre_tunnel`, `ospf_routing`), idempotencia y ejecución del playbook.
-2. **Vídeo 2 (Automatización de Red con CI/CD)**: Demostración del funcionamiento de los pipelines. Muestra cómo un fallo de sintaxis es bloqueado en la etapa de pruebas y cómo una fusión en `main` desencadena exitosamente el despliegue automático y seguro utilizando secrets en la nube.
